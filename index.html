@@ -1,0 +1,880 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>炸彈超人</title>
+    <style>
+        body {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            margin: 0;
+            background-color: #f0f0f0;
+            font-family: '微軟正黑體', 'Arial', sans-serif;
+            overflow: hidden; /* 防止滾動條 */
+        }
+        h1 {
+            color: #333;
+            margin-bottom: 20px;
+        }
+        canvas {
+            background-color: #4CAF50; /* 模擬草地或地面 */
+            border: 5px solid #333;
+            display: block;
+            image-rendering: pixelated; /* 確保像素化，保持遊戲風格 */
+            image-rendering: -moz-crisp-edges;
+            image-rendering: crisp-edges;
+        }
+        .game-info {
+            margin-top: 20px;
+            font-size: 1.2em;
+            color: #555;
+            display: flex;
+            gap: 30px;
+            flex-wrap: wrap; /* 自動換行 */
+            justify-content: center;
+        }
+        .controls {
+            margin-top: 20px;
+            font-size: 1em;
+            color: #666;
+            text-align: center;
+        }
+
+        /* 新增道具說明區塊樣式 */
+        .item-description {
+            margin-top: 20px;
+            padding: 15px 30px;
+            background-color: #e0e0e0;
+            border-radius: 10px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+            text-align: center;
+            font-size: 1em;
+            color: #333;
+        }
+        .item-description h3 {
+            margin-top: 0;
+            color: #555;
+        }
+        .item-description ul {
+            list-style: none;
+            padding: 0;
+            margin: 10px 0 0 0;
+            text-align: left; /* 讓列表項左對齊 */
+        }
+        .item-description li {
+            margin-bottom: 8px;
+            display: flex;
+            align-items: center;
+        }
+        .item-description .item-icon {
+            width: 25px; /* 圖示大小 */
+            height: 25px;
+            border-radius: 5px;
+            margin-right: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            color: white;
+            font-size: 0.8em;
+        }
+        .item-description .item-icon.bomb {
+            background-color: purple;
+        }
+        .item-description .item-icon.fire {
+            background-color: orange;
+        }
+        .item-description .item-icon.speed { /* 新增速度道具樣式 */
+            background-color: blue;
+        }
+
+
+        /* 遊戲結束畫面樣式 */
+        .game-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.7);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 3em;
+            font-weight: bold;
+            z-index: 1000;
+            pointer-events: none; /* 預設不阻擋下方事件 */
+            opacity: 0; /* 預設隱藏 */
+            transition: opacity 0.3s ease-in-out;
+        }
+        .game-overlay.active {
+            opacity: 1;
+            pointer-events: auto; /* 啟用時阻擋事件 */
+        }
+        .overlay-content {
+            background-color: #333;
+            padding: 40px 60px;
+            border-radius: 15px;
+            box-shadow: 0 0 20px rgba(0, 0, 0, 0.5);
+            text-align: center;
+        }
+        .overlay-content button {
+            padding: 15px 30px;
+            font-size: 1em;
+            margin-top: 30px;
+            cursor: pointer;
+            border: none;
+            border-radius: 8px;
+            background-color: #4CAF50;
+            color: white;
+            transition: background-color 0.2s ease;
+        }
+        .overlay-content button:hover {
+            background-color: #45a049;
+        }
+        .overlay-score {
+            font-size: 1.5em;
+            margin-top: 15px;
+            color: #FFD700; /* 金色 */
+        }
+        .overlay-message {
+            margin-bottom: 20px;
+            font-size: 1.2em;
+        }
+    </style>
+</head>
+<body>
+    <h1>炸彈超人</h1>
+    <canvas id="gameCanvas"></canvas>
+    <div class="game-info">
+        <p>關卡: <span id="currentLevel">1</span></p>
+        <p>分數: <span id="score">0</span></p>
+        <p>炸彈數量: <span id="bombsAvailable">1</span></p>
+        <p>爆炸範圍: <span id="powerRange">1</span></p>
+        <p>移動速度: <span id="moveSpeed">1</span></p> <p>過關條件: <span id="winCondition">清除所有方塊</span></p>
+    </div>
+
+    <div class="item-description">
+        <h3>道具說明</h3>
+        <ul>
+            <li>
+                <div class="item-icon bomb">B</div>
+                炸彈數量 (B): 增加可放置的炸彈數量
+            </li>
+            <li>
+                <div class="item-icon fire">F</div>
+                爆炸範圍 (F): 增加炸彈的爆炸範圍
+            </li>
+            <li>
+                <div class="item-icon speed">S</div>
+                移動速度 (S): 增加玩家移動速度
+            </li>
+        </ul>
+    </div>
+
+    <div class="controls">
+        <p>控制：</p>
+        <p>⬆️W / ⬅️A / ⬇️S / ➡️D 移動</p>
+        <p>空格鍵放置炸彈</p>
+    </div>
+
+    <div id="gameOverOverlay" class="game-overlay">
+        <div class="overlay-content">
+            <h2 id="overlayMessage">遊戲結束！</h2>
+            <p class="overlay-score">你的分數: <span id="finalScore">0</span></p>
+            <button id="restartButton">重新開始</button>
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+
+        const TILE_SIZE = 40; // 每個方塊的大小
+        const MAP_ROWS = 13; // 地圖的行數
+        const MAP_COLS = 15; // 地圖的列數
+
+        canvas.width = MAP_COLS * TILE_SIZE;
+        canvas.height = MAP_ROWS * TILE_SIZE;
+
+        const scoreDisplay = document.getElementById('score');
+        const bombsAvailableDisplay = document.getElementById('bombsAvailable');
+        const powerRangeDisplay = document.getElementById('powerRange');
+        const moveSpeedDisplay = document.getElementById('moveSpeed'); // 新增移動速度顯示
+        const currentLevelDisplay = document.getElementById('currentLevel');
+        const winConditionDisplay = document.getElementById('winCondition');
+
+        const gameOverOverlay = document.getElementById('gameOverOverlay');
+        const overlayMessage = document.getElementById('overlayMessage');
+        const finalScoreDisplay = document.getElementById('finalScore');
+        const restartButton = document.getElementById('restartButton');
+
+        // 載入圖片
+        const playerImage = new Image();
+        playerImage.src = 'image/man.png';
+        const bombImage = new Image();
+        bombImage.src = 'image/bomb.png';
+
+        // 玩家初始能力值 (將用於遊戲重新開始時的重置)
+        const INITIAL_BOMBS = 1;
+        const INITIAL_POWER = 1;
+        const INITIAL_SPEED_MULTIPLIER = 1; // 基礎移動速度乘數
+
+        let player = {
+            x: 1,
+            y: 1,
+            bombs: INITIAL_BOMBS,
+            power: INITIAL_POWER,
+            speedMultiplier: INITIAL_SPEED_MULTIPLIER, // 新增移動速度乘數
+            score: 0,
+            isAlive: true,
+            // 增加一個屬性來控制移動間隔，模擬速度
+            // 越小移動越快，但我們現在使用按鍵事件，所以速度透過跳過幀來控制可能更好
+            // 或者簡單地，每次移動改變多個像素，但這會讓格狀移動失去精確性
+            // 這裡簡單地增加 speedMultiplier，留作未來擴展
+        };
+
+        // 地圖元素定義: 0: 空地, 1: 實心牆, 2: 可破壞方塊
+        const MAP_EMPTY = 0;
+        const MAP_WALL = 1;
+        const MAP_BREAKABLE = 2;
+
+        // 道具類型定義: 3: 增加炸彈數, 4: 增加爆炸範圍, 5: 增加移動速度
+        const ITEM_BOMB = 3;
+        const ITEM_FIRE = 4;
+        const ITEM_SPEED = 5; // 新增速度道具
+
+        let gameMap = [];
+        let bombs = [];
+        let items = [];
+
+        let currentLevel = 1;
+        const maxLevels = 3;
+
+        // 預設關卡地圖，只包含固定牆壁
+        const baseLevelMaps = [
+            // Level 1
+            [
+                [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
+                [1,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
+                [1,0,1,0,1,0,1,0,1,0,1,0,1,0,1],
+                [1,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
+                [1,0,1,0,1,0,1,0,1,0,1,0,1,0,1],
+                [1,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
+                [1,0,1,0,1,0,1,0,1,0,1,0,1,0,1],
+                [1,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
+                [1,0,1,0,1,0,1,0,1,0,1,0,1,0,1],
+                [1,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
+                [1,0,1,0,1,0,1,0,1,0,1,0,1,0,1],
+                [1,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
+                [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1]
+            ],
+            // Level 2 (更複雜的固定牆)
+            [
+                [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
+                [1,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
+                [1,0,1,1,0,1,1,0,1,1,0,1,1,0,1],
+                [1,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
+                [1,0,1,0,1,0,1,0,1,0,1,0,1,0,1],
+                [1,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
+                [1,0,1,1,0,1,1,0,1,1,0,1,1,0,1],
+                [1,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
+                [1,0,1,0,1,0,1,0,1,0,1,0,1,0,1],
+                [1,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
+                [1,0,1,1,0,1,1,0,1,1,0,1,1,0,1],
+                [1,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
+                [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1]
+            ],
+            // Level 3 (更多空地但仍有經典牆)
+            [
+                [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
+                [1,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
+                [1,0,1,0,1,0,1,0,1,0,1,0,1,0,1],
+                [1,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
+                [1,0,1,0,1,0,1,0,1,0,1,0,1,0,1],
+                [1,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
+                [1,0,1,0,1,0,1,0,1,0,1,0,1,0,1],
+                [1,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
+                [1,0,1,0,1,0,1,0,1,0,1,0,1,0,1],
+                [1,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
+                [1,0,1,0,1,0,1,0,1,0,1,0,1,0,1],
+                [1,0,0,0,0,0,0,0,0,0,0,0,0,0,1],
+                [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1]
+            ]
+        ];
+
+        function initGame() {
+            player = {
+                // x, y 將由 findRandomSafeSpawn 設置
+                bombs: INITIAL_BOMBS, // 遊戲開始時的炸彈數
+                power: INITIAL_POWER, // 遊戲開始時的爆炸範圍
+                speedMultiplier: INITIAL_SPEED_MULTIPLIER, // 遊戲開始時的移動速度
+                score: 0,
+                isAlive: true
+            };
+            bombs = [];
+            items = [];
+            currentLevel = 1; // 每次重新開始都從第一關
+            loadLevel(currentLevel);
+            gameOverOverlay.classList.remove('active'); // 隱藏遊戲結束畫面
+            updateGame();
+        }
+
+        function loadLevel(level) {
+            currentLevelDisplay.textContent = level;
+            winConditionDisplay.textContent = '清除所有可破壞方塊';
+            // 複製地圖，避免直接修改原始模板
+            gameMap = baseLevelMaps[level - 1].map(row => [...row]);
+
+            // **能力隨關卡增加的邏輯**
+            // 玩家的能力在過關時會保持，而不是每次重置
+            // 只有在 initGame (全新開始) 時才會重置為 INITIAL 值
+            // 因此這裡不需要重置 player.bombs, player.power, player.speedMultiplier
+            // 但可以根據關卡等級提供一些初始獎勵
+            if (level > 1) {
+                // 每過一關，炸彈數量和爆炸範圍都增加一點點作為獎勵
+                player.bombs = Math.min(player.bombs + 1, 5); // 炸彈上限例如5個
+                player.power = Math.min(player.power + 1, 5); // 爆炸範圍上限例如5格
+                // 速度可以不隨關卡自動增加，主要靠道具
+            }
+
+
+            findRandomSafeSpawn(); // 找到隨機安全出生點並設置玩家位置
+            generateBreakableBlocks(level); // 根據關卡生成不同數量的可破壞方塊
+            updateGame(); // 立即更新一次，顯示新關卡
+        }
+
+        function findRandomSafeSpawn() {
+            const potentialSpawns = [];
+            // 遍歷所有格子，尋找適合玩家出生的位置
+            for (let r = 1; r < MAP_ROWS - 1; r++) { // 避免最外層牆壁 (通常是固定牆)
+                for (let c = 1; c < MAP_COLS - 1; c++) { // 避免最外層牆壁
+                    // 確保玩家出生點是空地，且右邊和下邊也是空地
+                    // 這樣保證玩家出生後至少有兩個方向可以移動，不會被立即堵死
+                    if (gameMap[r][c] === MAP_EMPTY &&
+                        gameMap[r][c + 1] === MAP_EMPTY &&
+                        gameMap[r + 1][c] === MAP_EMPTY) {
+                        potentialSpawns.push({x: c, y: r});
+                    }
+                }
+            }
+
+            if (potentialSpawns.length > 0) {
+                const randomIndex = Math.floor(Math.random() * potentialSpawns.length);
+                player.x = potentialSpawns[randomIndex].x;
+                player.y = potentialSpawns[randomIndex].y;
+            } else {
+                console.warn("未能找到理想的隨機出生點，使用預設位置 (1,1)。");
+                player.x = 1;
+                player.y = 1;
+            }
+        }
+
+
+        function generateBreakableBlocks(level) {
+            const breakableBlockCounts = [40, 50, 60]; // 各關卡生成的可破壞方塊數量
+            const breakableBlockCount = breakableBlockCounts[level - 1] || 40;
+
+            let placedCount = 0;
+            const validPositions = [];
+            for (let r = 0; r < MAP_ROWS; r++) {
+                for (let c = 0; c < MAP_COLS; c++) {
+                    // 避免在固定牆、玩家起始點附近放置可破壞方塊
+                    // 注意：這裡的判斷是基於玩家已確定的隨機出生點
+                    if (gameMap[r][c] === MAP_EMPTY &&
+                        !(r === player.y && c === player.x) &&
+                        !(r === player.y && c === player.x + 1) && // 玩家右邊一格
+                        !(r === player.y + 1 && c === player.x) && // 玩家下面一格
+                        !(r === player.y && c === player.x - 1) && // 玩家左邊一格
+                        !(r === player.y - 1 && c === player.x)    // 玩家上面一格
+                    ) {
+                        validPositions.push({r, c});
+                    }
+                }
+            }
+
+            // 隨機打亂有效位置
+            validPositions.sort(() => Math.random() - 0.5);
+
+            for (let i = 0; i < breakableBlockCount && i < validPositions.length; i++) {
+                const {r, c} = validPositions[i];
+                gameMap[r][c] = MAP_BREAKABLE;
+                placedCount++;
+            }
+        }
+
+        function drawMap() {
+            for (let r = 0; r < MAP_ROWS; r++) {
+                for (let c = 0; c < MAP_COLS; c++) {
+                    const x = c * TILE_SIZE;
+                    const y = r * TILE_SIZE;
+
+                    // 繪製地面 (更精緻的方格紋理)
+                    ctx.fillStyle = (r + c) % 2 === 0 ? '#4CAF50' : '#45a049'; // 交錯的綠色方格
+                    ctx.fillRect(x, y, TILE_SIZE, TILE_SIZE);
+
+                    if (gameMap[r][c] === MAP_WALL) { // 實心牆
+                        // 精緻化牆壁：模擬磚塊和光影
+                        ctx.fillStyle = '#8B4513'; // 深棕色基底
+                        ctx.fillRect(x, y, TILE_SIZE, TILE_SIZE);
+                        // 增加陰影效果
+                        ctx.fillStyle = 'rgba(0,0,0,0.2)';
+                        ctx.fillRect(x, y + TILE_SIZE - 5, TILE_SIZE, 5); // 底部陰影
+                        ctx.fillRect(x + TILE_SIZE - 5, y, 5, TILE_SIZE); // 右側陰影
+
+                        ctx.strokeStyle = '#654321'; // 磚縫顏色
+                        ctx.lineWidth = 2;
+                        ctx.strokeRect(x, y, TILE_SIZE, TILE_SIZE);
+                    } else if (gameMap[r][c] === MAP_BREAKABLE) { // 可破壞方塊
+                        // 精緻化可破壞方塊：木箱質感
+                        ctx.fillStyle = '#A0522D'; // 土棕色
+                        ctx.fillRect(x, y, TILE_SIZE, TILE_SIZE);
+                        ctx.strokeStyle = '#8B4513'; // 邊框
+                        ctx.lineWidth = 2;
+                        ctx.strokeRect(x, y, TILE_SIZE, TILE_SIZE);
+
+                        // 模擬木紋理或裂縫
+                        ctx.beginPath();
+                        ctx.moveTo(x + TILE_SIZE * 0.2, y + TILE_SIZE * 0.3);
+                        ctx.lineTo(x + TILE_SIZE * 0.8, y + TILE_SIZE * 0.7);
+                        ctx.moveTo(x + TILE_SIZE * 0.2, y + TILE_SIZE * 0.7);
+                        ctx.lineTo(x + TILE_SIZE * 0.8, y + TILE_SIZE * 0.3);
+                        ctx.strokeStyle = '#7A3F22';
+                        ctx.lineWidth = 1;
+                        ctx.stroke();
+                    }
+                }
+            }
+        }
+
+        function drawPlayer() {
+            if (playerImage.complete) {
+                const x = player.x * TILE_SIZE;
+                const y = player.y * TILE_SIZE;
+                ctx.drawImage(playerImage, x, y, TILE_SIZE, TILE_SIZE);
+            } else {
+                ctx.fillStyle = 'blue';
+                ctx.fillRect(player.x * TILE_SIZE, player.y * TILE_SIZE, TILE_SIZE, TILE_SIZE);
+            }
+        }
+
+        function drawBombs() {
+            bombs.forEach(bomb => {
+                if (bombImage.complete) {
+                    // 讓炸彈稍微縮小並置中，增加立體感
+                    const drawX = bomb.x * TILE_SIZE + TILE_SIZE * 0.1;
+                    const drawY = bomb.y * TILE_SIZE + TILE_SIZE * 0.1;
+                    const drawSize = TILE_SIZE * 0.8;
+                    ctx.drawImage(bombImage, drawX, drawY, drawSize, drawSize);
+                } else {
+                    ctx.fillStyle = 'black';
+                    ctx.fillRect(bomb.x * TILE_SIZE, bomb.y * TILE_SIZE, TILE_SIZE, TILE_SIZE);
+                }
+            });
+        }
+
+        function drawItems() {
+            items.forEach(item => {
+                const x = item.x * TILE_SIZE;
+                const y = item.y * TILE_SIZE;
+                // 道具繪製：在方塊中心繪製一個小圖標或文字
+                let itemColor;
+                let itemText = '';
+
+                if (item.type === ITEM_BOMB) {
+                    itemColor = 'purple';
+                    itemText = 'B'; // Bomb
+                } else if (item.type === ITEM_FIRE) {
+                    itemColor = 'orange';
+                    itemText = 'F'; // Fire
+                } else if (item.type === ITEM_SPEED) { // 繪製速度道具
+                    itemColor = 'blue';
+                    itemText = 'S'; // Speed
+                }
+
+                ctx.fillStyle = itemColor;
+                ctx.fillRect(x + TILE_SIZE * 0.25, y + TILE_SIZE * 0.25, TILE_SIZE * 0.5, TILE_SIZE * 0.5); // 小方塊
+                ctx.strokeStyle = 'white';
+                ctx.lineWidth = 1;
+                ctx.strokeRect(x + TILE_SIZE * 0.25, y + TILE_SIZE * 0.25, TILE_SIZE * 0.5, TILE_SIZE * 0.5);
+
+                ctx.fillStyle = 'white';
+                ctx.font = 'bold 20px Arial';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText(itemText, x + TILE_SIZE / 2, y + TILE_SIZE / 2);
+            });
+        }
+
+        function updateGame() {
+            if (!player.isAlive) return; // 如果玩家死亡，停止更新遊戲
+
+            ctx.clearRect(0, 0, canvas.width, canvas.height); // 清空畫布
+            drawMap();
+            drawItems(); // 繪製道具
+            drawBombs();
+            drawPlayer();
+            updateStatsDisplay();
+            checkItemPickup(); // 檢查玩家是否拾取道具
+            checkWinCondition(); // 檢查是否達到勝利條件
+        }
+
+        function updateStatsDisplay() {
+            scoreDisplay.textContent = player.score;
+            bombsAvailableDisplay.textContent = player.bombs;
+            powerRangeDisplay.textContent = player.power;
+            moveSpeedDisplay.textContent = player.speedMultiplier; // 更新顯示移動速度
+        }
+
+        // 玩家移動處理
+        let lastMoveTime = 0;
+        const BASE_MOVE_DELAY = 120; // 基礎移動延遲 (毫秒)，數值越小移動越快
+
+        document.addEventListener('keydown', (e) => {
+            if (!player.isAlive) return; // 如果玩家死亡，不能移動
+
+            const currentTime = Date.now();
+            // 根據玩家的 speedMultiplier 調整實際移動延遲
+            const actualMoveDelay = BASE_MOVE_DELAY / player.speedMultiplier;
+
+            // 如果距離上次移動的時間不足，則不進行移動 (模擬速度控制)
+            if (currentTime - lastMoveTime < actualMoveDelay) {
+                return;
+            }
+
+            let newPlayerX = player.x;
+            let newPlayerY = player.y;
+
+            let moved = false;
+
+            switch (e.key) {
+                case 'w':
+                case 'W':
+                case 'ArrowUp':
+                    newPlayerY--;
+                    moved = true;
+                    break;
+                case 's':
+                case 'S':
+                case 'ArrowDown':
+                    newPlayerY++;
+                    moved = true;
+                    break;
+                case 'a':
+                case 'A':
+                case 'ArrowLeft':
+                    newPlayerX--;
+                    moved = true;
+                    break;
+                case 'd':
+                case 'D':
+                case 'ArrowRight':
+                    newPlayerX++;
+                    moved = true;
+                    break;
+                case ' ': // 空格鍵放置炸彈
+                    e.preventDefault(); // 防止頁面滾動
+                    placeBomb();
+                    break;
+            }
+
+            if (moved) {
+                // 檢查新位置是否在地圖範圍內
+                if (newPlayerY >= 0 && newPlayerY < MAP_ROWS && newPlayerX >= 0 && newPlayerX < MAP_COLS) {
+                    // 檢查移動是否合法 (不穿牆、不穿可破壞方塊、不穿炸彈)
+                    const targetTileType = gameMap[newPlayerY][newPlayerX];
+                    const hasBombAtTarget = bombs.some(bomb => bomb.x === newPlayerX && bomb.y === newPlayerY);
+
+                    if (targetTileType === MAP_EMPTY && !hasBombAtTarget) {
+                        player.x = newPlayerX;
+                        player.y = newPlayerY;
+                        lastMoveTime = currentTime; // 只有成功移動才更新時間
+                    }
+                }
+            }
+            updateGame();
+        });
+
+        function placeBomb() {
+            // 檢查是否已有炸彈在當前位置
+            const existingBomb = bombs.some(bomb => bomb.x === player.x && bomb.y === player.y);
+
+            if (player.bombs > 0 && !existingBomb) {
+                const bomb = {
+                    x: player.x,
+                    y: player.y,
+                    timer: 3000 // 炸彈爆炸時間 (毫秒)
+                };
+                bombs.push(bomb);
+                player.bombs--; // 減少可用炸彈數量
+
+                setTimeout(() => {
+                    explodeBomb(bomb);
+                }, bomb.timer);
+                updateGame(); // 立即更新顯示新放置的炸彈
+            }
+        }
+
+        function explodeBomb(bomb) {
+            // 從炸彈列表中移除
+            bombs = bombs.filter(b => b !== bomb);
+            player.bombs++; // 炸彈爆炸後，玩家可以放置新的炸彈
+
+            const explosionAreas = getExplosionAreas(bomb);
+            let hasPlayerBeenHit = false;
+
+            // 儲存爆炸效果的方塊，以便後續清除
+            const tempExplosionTiles = [];
+
+            explosionAreas.forEach(area => {
+                const r = area.y;
+                const c = area.x;
+
+                // 檢查是否炸到玩家
+                if (player.x === c && player.y === r && player.isAlive) {
+                    hasPlayerBeenHit = true;
+                }
+
+                // 處理可破壞方塊
+                if (gameMap[r][c] === MAP_BREAKABLE) {
+                    gameMap[r][c] = MAP_EMPTY; // 破壞方塊變成空地
+                    player.score += 10; // 炸毀一個可破壞方塊加10分
+                    dropItem(c, r); // 有機率掉落道具
+                }
+
+                // 繪製爆炸效果 (更精緻的火焰效果)
+                const x = c * TILE_SIZE;
+                const y = r * TILE_SIZE;
+                ctx.fillStyle = 'orange'; // 中心橘色
+                ctx.fillRect(x, y, TILE_SIZE, TILE_SIZE);
+                ctx.fillStyle = 'red'; // 外圍紅色
+                ctx.fillRect(x + TILE_SIZE * 0.1, y + TILE_SIZE * 0.1, TILE_SIZE * 0.8, TILE_SIZE * 0.8);
+                ctx.fillStyle = 'yellow'; // 核心黃色
+                ctx.fillRect(x + TILE_SIZE * 0.2, y + TILE_SIZE * 0.2, TILE_SIZE * 0.6, TILE_SIZE * 0.6);
+
+                tempExplosionTiles.push({x, y}); // 紀錄爆炸位置
+            });
+
+            if (hasPlayerBeenHit) {
+                endGame(false); // 玩家被炸到，遊戲結束 (失敗)
+                return; // 遊戲結束，不繼續後續更新
+            }
+
+            // 清除爆炸效果
+            setTimeout(() => {
+                // 重新繪製受影響的區域，覆蓋爆炸效果
+                tempExplosionTiles.forEach(tile => {
+                    // 根據地圖實際狀態重新繪製
+                    const r = tile.y / TILE_SIZE;
+                    const c = tile.x / TILE_SIZE;
+                    drawMapTile(r, c); // 繪製單個地圖方塊
+                    drawItemTile(r, c); // 繪製該位置的道具
+                });
+                drawBombs(); // 重新繪製炸彈，以防有炸彈在爆炸區域邊緣
+                drawPlayer(); // 重新繪製玩家
+                updateGame(); // 最後再呼叫一次完整更新，確保一致性
+            }, 300); // 爆炸效果顯示0.3秒
+        }
+
+        // 輔助函數：單獨繪製某個地圖方塊
+        function drawMapTile(r, c) {
+            const x = c * TILE_SIZE;
+            const y = r * TILE_SIZE;
+
+            // 繪製地面
+            ctx.fillStyle = (r + c) % 2 === 0 ? '#4CAF50' : '#45a049';
+            ctx.fillRect(x, y, TILE_SIZE, TILE_SIZE);
+
+            if (gameMap[r][c] === MAP_WALL) {
+                ctx.fillStyle = '#8B4513';
+                ctx.fillRect(x, y, TILE_SIZE, TILE_SIZE);
+                ctx.fillStyle = 'rgba(0,0,0,0.2)';
+                ctx.fillRect(x, y + TILE_SIZE - 5, TILE_SIZE, 5);
+                ctx.fillRect(x + TILE_SIZE - 5, y, 5, TILE_SIZE);
+                ctx.strokeStyle = '#654321';
+                ctx.lineWidth = 2;
+                ctx.strokeRect(x, y, TILE_SIZE, TILE_SIZE);
+            } else if (gameMap[r][c] === MAP_BREAKABLE) {
+                ctx.fillStyle = '#A0522D';
+                ctx.fillRect(x, y, TILE_SIZE, TILE_SIZE);
+                ctx.strokeStyle = '#8B4513';
+                ctx.lineWidth = 2;
+                ctx.strokeRect(x, y, TILE_SIZE, TILE_SIZE);
+                ctx.beginPath();
+                ctx.moveTo(x + TILE_SIZE * 0.2, y + TILE_SIZE * 0.3);
+                ctx.lineTo(x + TILE_SIZE * 0.8, y + TILE_SIZE * 0.7);
+                ctx.moveTo(x + TILE_SIZE * 0.2, y + TILE_SIZE * 0.7);
+                ctx.lineTo(x + TILE_SIZE * 0.8, y + TILE_SIZE * 0.3);
+                ctx.strokeStyle = '#7A3F22';
+                ctx.lineWidth = 1;
+                ctx.stroke();
+            }
+        }
+
+        // 輔助函數：單獨繪製某個位置的道具
+        function drawItemTile(r, c) {
+            items.forEach(item => {
+                if (item.x === c && item.y === r) {
+                    const x = item.x * TILE_SIZE;
+                    const y = item.y * TILE_SIZE;
+                    let itemColor;
+                    let itemText = '';
+
+                    if (item.type === ITEM_BOMB) {
+                        itemColor = 'purple';
+                        itemText = 'B';
+                    } else if (item.type === ITEM_FIRE) {
+                        itemColor = 'orange';
+                        itemText = 'F';
+                    } else if (item.type === ITEM_SPEED) {
+                        itemColor = 'blue';
+                        itemText = 'S';
+                    }
+
+                    ctx.fillStyle = itemColor;
+                    ctx.fillRect(x + TILE_SIZE * 0.25, y + TILE_SIZE * 0.25, TILE_SIZE * 0.5, TILE_SIZE * 0.5);
+                    ctx.strokeStyle = 'white';
+                    ctx.lineWidth = 1;
+                    ctx.strokeRect(x + TILE_SIZE * 0.25, y + TILE_SIZE * 0.25, TILE_SIZE * 0.5, TILE_SIZE * 0.5);
+
+                    ctx.fillStyle = 'white';
+                    ctx.font = 'bold 20px Arial';
+                    ctx.textAlign = 'center';
+                    ctx.textBaseline = 'middle';
+                    ctx.fillText(itemText, x + TILE_SIZE / 2, y + TILE_SIZE / 2);
+                }
+            });
+        }
+
+
+        function getExplosionAreas(bomb) {
+            const areas = [{ x: bomb.x, y: bomb.y }]; // 炸彈中心點
+            const directions = [[0, -1], [0, 1], [-1, 0], [1, 0]]; // 上下左右
+
+            directions.forEach(dir => {
+                for (let i = 1; i <= player.power; i++) {
+                    const nx = bomb.x + dir[0] * i;
+                    const ny = bomb.y + dir[1] * i;
+
+                    if (nx >= 0 && nx < MAP_COLS && ny >= 0 && ny < MAP_ROWS) {
+                        if (gameMap[ny][nx] === MAP_WALL) {
+                            break; // 遇到實心牆停止蔓延
+                        }
+                        areas.push({ x: nx, y: ny });
+                        if (gameMap[ny][nx] === MAP_BREAKABLE) {
+                            // 即使遇到可破壞方塊，爆炸會穿透它，但會在方塊處停止延伸
+                            // 這裡的邏輯是，炸彈會影響到可破壞方塊，但爆炸不會延伸到可破壞方塊之後的格子
+                            break;
+                        }
+                    } else {
+                        break; // 超出地圖範圍
+                    }
+                }
+            });
+            return areas;
+        }
+
+        function dropItem(x, y) {
+            // 20% 機率掉落道具
+            if (Math.random() < 0.20) {
+                const itemTypes = [ITEM_BOMB, ITEM_FIRE, ITEM_SPEED]; // 所有可能的道具類型
+                const randomType = itemTypes[Math.floor(Math.random() * itemTypes.length)];
+                items.push({ x: x, y: y, type: randomType });
+            }
+        }
+
+        function checkItemPickup() {
+            items.forEach((item, index) => {
+                if (player.x === item.x && player.y === item.y) {
+                    // 拾取道具
+                    if (item.type === ITEM_BOMB) {
+                        player.bombs++;
+                    } else if (item.type === ITEM_FIRE) {
+                        player.power++;
+                    } else if (item.type === ITEM_SPEED) {
+                        player.speedMultiplier += 0.2; // 每次增加 0.2 倍速
+                        player.speedMultiplier = Math.min(player.speedMultiplier, 3); // 速度上限例如 3 倍
+                    }
+                    items.splice(index, 1); // 從列表中移除已拾取道具
+                    updateGame(); // 更新顯示
+                }
+            });
+        }
+
+        function checkWinCondition() {
+            // 檢查是否所有可破壞方塊都被清除
+            const remainingBreakableBlocks = gameMap.flat().filter(tile => tile === MAP_BREAKABLE).length;
+
+            if (remainingBreakableBlocks === 0) {
+                // 如果是最後一關，則遊戲勝利
+                if (currentLevel >= maxLevels) {
+                    endGame(true); // 遊戲勝利
+                } else {
+                    // 進入下一關
+                    currentLevel++;
+                    player.score += 100; // 過關獎勵
+                    // 玩家的能力 (bombs, power, speedMultiplier) 會保留並在 loadLevel 中可能獲得關卡獎勵
+                    bombs = []; // 清空炸彈
+                    items = []; // 清空道具
+                    loadLevel(currentLevel);
+                }
+            }
+        }
+
+        function endGame(isWin) {
+            player.isAlive = false; // 玩家死亡
+            gameOverOverlay.classList.add('active');
+            finalScoreDisplay.textContent = player.score;
+
+            if (isWin) {
+                overlayMessage.textContent = '恭喜你！遊戲勝利！';
+                overlayMessage.style.color = '#FFD700'; // 金色
+            } else {
+                overlayMessage.textContent = '遊戲結束！你被炸到了！';
+                overlayMessage.style.color = '#FF4500'; // 橙紅色
+            }
+        }
+
+        restartButton.addEventListener('click', () => {
+            initGame(); // 重新初始化遊戲
+        });
+
+
+        // 圖片載入完成後開始遊戲
+        let imagesLoaded = 0;
+        const totalImages = 2; // playerImage, bombImage
+
+        const imageLoadHandler = () => {
+            imagesLoaded++;
+            if (imagesLoaded === totalImages) {
+                initGame(); // 所有圖片載入完成後開始遊戲
+            }
+        };
+
+        playerImage.onload = imageLoadHandler;
+        bombImage.onload = imageLoadHandler;
+
+        // 如果圖片因為某些原因載入失敗，也要有備案
+        playerImage.onerror = bombImage.onerror = () => {
+            console.error('圖片載入失敗，遊戲可能無法正常顯示圖片。');
+            imagesLoaded++; // 即使失敗也要計數，避免阻塞遊戲
+            if (imagesLoaded === totalImages) {
+                initGame();
+            }
+        };
+
+        // 如果圖片已經在快取中，onload 可能不會觸發，所以需要在圖片載入前調用一次判斷
+        if (playerImage.complete && bombImage.complete) {
+            imagesLoaded = totalImages;
+            initGame();
+        }
+
+    </script>
+</body>
+</html>
